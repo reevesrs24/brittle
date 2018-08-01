@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import sys
 import socket
 import getopt
@@ -10,6 +12,73 @@ store = False
 discover = False
 
 
+def get_generic_port_mapping_entry():
+    
+    payload =   """<?xml version="1.0" encoding="utf-8"?>
+                <s:Envelope>
+                    <s:Body>
+                        <u:GetGenericPortMappingEntry xmlns:u="urn:schemas-upnp-org:services:WANIPConnections:1"> 
+                           <NewPortMappingIndex></NewPortMappingIndex> 
+                        </u:GetGenericPortMappingEntry> 
+                    </s:Body> 
+                </s:Envelope>"""
+
+    headers = { 'content-type': 'text/xml', 'SOAPAction' : 'urn:schemas-upnp-org:service:WANIPConnection:1#GetGenericPortMappingEntry' }
+    r = requests.post('http://192.168.1.1:5000/Public_UPNP_C3', headers=headers, data=payload )
+    print r.content
+
+
+def get_status_info():
+
+    payload =   """<?xml version="1.0" encoding="utf-8"?>
+                <s:Envelope>
+                    <s:Body>
+                        <u:GetStatusInfo xmlns:u="urn:schemas-upnp-org:services:WANIPConnections:1"> 
+                           <NewConnectionStatus></NewConnectionStatus> 
+                           <NewLastConnectionError></NewLastConnectionError>
+                           <NewUptime></NewUptime>  
+                        </u:GetStatusInfo> 
+                    </s:Body> 
+                </s:Envelope>"""
+
+    headers = { 'content-type': 'text/xml', 'SOAPAction' : 'urn:schemas-upnp-org:service:WANIPConnection:1#GetStatusInfo' }
+    r = requests.post('http://192.168.1.1:5000/Public_UPNP_C3', headers=headers, data=payload )
+    print r.content
+
+def remove_port_mapping():
+
+    payload =   """<?xml version="1.0" encoding="utf-8"?>
+                <s:Envelope>
+                    <s:Body>
+                        <u:DeletePortMapping xmlns:u="urn:schemas-upnp-org:services:WANIPConnections:1"> 
+                           <NewRemoteHost></NewRemoteHost> 
+                           <NewExternalPort>7777</NewExternalPort>
+                           <NewProtocol>TCP</NewProtocol>  
+                        </u:DeletePortMapping> 
+                    </s:Body> 
+                </s:Envelope>"""
+
+    headers = { 'content-type': 'text/xml', 'SOAPAction' : 'urn:schemas-upnp-org:service:WANIPConnection:1#DeletePortMapping' }
+    r = requests.post('http://192.168.1.1:5000/Public_UPNP_C3', headers=headers, data=payload )
+    print r.content
+
+
+def get_external_ip_addr():
+
+    payload =   """<?xml version="1.0" encoding="utf-8"?>
+                <s:Envelope>
+                    <s:Body>
+                        <u:GetExternalIPAddress xmlns:u="urn:schemas-upnp-org:services:WANIPConnections:1"> 
+                            <NewExternalIPAddress></NewExternalIPAddress>  
+                        </u:GetExternalIPAddress> 
+                    </s:Body> 
+                </s:Envelope>"""
+
+    headers = { 'content-type': 'text/xml', 'SOAPAction' : 'urn:schemas-upnp-org:service:WANIPConnection:1#GetExternalIPAddress' }
+    r = requests.post('http://192.168.1.1:5000/Public_UPNP_C3', headers=headers, data=payload )
+    print r.content
+
+
 def add_port_mapping():
 
     payload =   """<?xml version="1.0" encoding="utf-8"?>
@@ -17,25 +86,25 @@ def add_port_mapping():
                     <s:Body>
                         <u:AddPortMapping xmlns:u="urn:schemas-upnp-org:services:WANIPConnections:1"> 
                             <NewRemoteHost></NewRemoteHost> 
-                            <NewExternalPort>1234</NewExternalPort> 
-                            <NewInternalClient>192.168.1.50</NewInternalClient> 
-                            <NewInternalPort>1234</NewInternalPort> 
+                            <NewExternalPort>7777</NewExternalPort> 
+                            <NewInternalClient>192.168.1.20</NewInternalClient> 
+                            <NewInternalPort>7777</NewInternalPort> 
                             <NewProtocol>TCP</NewProtocol> 
                             <NewPortMappingDescription>test</NewPortMappingDescription> 
-                            <NewLeaseDuration>1000</NewLeaseDuration> 
+                            <NewLeaseDuration>0</NewLeaseDuration> 
                             <NewEnabled>1</NewEnabled> 
                         </u:AddPortMapping> 
                     </s:Body> 
                 </s:Envelope>"""
 
     headers = { 'content-type': 'text/xml', 'SOAPAction' : 'urn:schemas-upnp-org:service:WANIPConnection:1#AddPortMapping' }
-    r = requests.post('http://192.168.1.1:34753/ctl/IPConn', headers=headers, data=payload )
+    r = requests.post('http://192.168.1.1:5000/Public_UPNP_C3', headers=headers, data=payload )
     print r.content
     
 
 
 def store_location(data):
-    #print data
+    print data
     location = re.search("(?i)Location: (.+?)\r\n", data)
     if location:
         print location.group(1)
@@ -80,7 +149,7 @@ def main():
 
     # read the command line options
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "dsqm", ["discover", "store", "quit", "mapping"])
+        opts, args = getopt.getopt(sys.argv[1:], "dsqmersg", ["discover", "store", "quit", "mapping", "external", "remove", "status", "generic"])
     except getopt.GetoptError as err:
         print str(err)
         sys.exit(-1)
@@ -94,6 +163,14 @@ def main():
             sys.exit(0)
         elif o in ("-m", "--mapping"):
             add_port_mapping()
+        elif o in ("-e", "--external"):
+            get_external_ip_addr()
+        elif o in ("-r", "--remove"):
+            remove_port_mapping()
+        elif o in ("-s", "--status"):
+            get_status_info()
+        elif o in ("-g", "--generic"):
+            get_generic_port_mapping_entry()
         else:
             assert False, "Unhandled Option"
 
