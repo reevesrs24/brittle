@@ -5,12 +5,12 @@ import socket
 import getopt
 import requests
 import re
-
+import xml.etree.ElementTree as ET
 
 ## Global Variables ##
 store = False
 discover = False
-
+url = 'http://192.168.1.1:5431/control/WANIPConnection'
 
 def get_generic_port_mapping_entry():
     
@@ -24,7 +24,7 @@ def get_generic_port_mapping_entry():
                 </s:Envelope>"""
 
     headers = { 'content-type': 'text/xml', 'SOAPAction' : 'urn:schemas-upnp-org:service:WANIPConnection:1#GetGenericPortMappingEntry' }
-    r = requests.post('http://192.168.1.1:5000/Public_UPNP_C3', headers=headers, data=payload )
+    r = requests.post( url, headers=headers, data=payload )
     print r.content
 
 
@@ -42,7 +42,7 @@ def get_status_info():
                 </s:Envelope>"""
 
     headers = { 'content-type': 'text/xml', 'SOAPAction' : 'urn:schemas-upnp-org:service:WANIPConnection:1#GetStatusInfo' }
-    r = requests.post('http://192.168.1.1:5000/Public_UPNP_C3', headers=headers, data=payload )
+    r = requests.post( url, headers=headers, data=payload )
     print r.content
 
 def remove_port_mapping():
@@ -52,14 +52,14 @@ def remove_port_mapping():
                     <s:Body>
                         <u:DeletePortMapping xmlns:u="urn:schemas-upnp-org:services:WANIPConnections:1"> 
                            <NewRemoteHost></NewRemoteHost> 
-                           <NewExternalPort>7777</NewExternalPort>
+                           <NewExternalPort>;reboot</NewExternalPort>
                            <NewProtocol>TCP</NewProtocol>  
                         </u:DeletePortMapping> 
                     </s:Body> 
                 </s:Envelope>"""
 
     headers = { 'content-type': 'text/xml', 'SOAPAction' : 'urn:schemas-upnp-org:service:WANIPConnection:1#DeletePortMapping' }
-    r = requests.post('http://192.168.1.1:5000/Public_UPNP_C3', headers=headers, data=payload )
+    r = requests.post( url, headers=headers, data=payload )
     print r.content
 
 
@@ -75,7 +75,7 @@ def get_external_ip_addr():
                 </s:Envelope>"""
 
     headers = { 'content-type': 'text/xml', 'SOAPAction' : 'urn:schemas-upnp-org:service:WANIPConnection:1#GetExternalIPAddress' }
-    r = requests.post('http://192.168.1.1:5000/Public_UPNP_C3', headers=headers, data=payload )
+    r = requests.post( url, headers=headers, data=payload )
     print r.content
 
 
@@ -87,10 +87,10 @@ def add_port_mapping():
                         <u:AddPortMapping xmlns:u="urn:schemas-upnp-org:services:WANIPConnections:1"> 
                             <NewRemoteHost></NewRemoteHost> 
                             <NewExternalPort>7777</NewExternalPort> 
-                            <NewInternalClient>192.168.1.20</NewInternalClient> 
-                            <NewInternalPort>7777</NewInternalPort> 
+                            <NewInternalClient>192.168.1.50</NewInternalClient> 
+                            <NewInternalPort>80</NewInternalPort> 
                             <NewProtocol>TCP</NewProtocol> 
-                            <NewPortMappingDescription>test</NewPortMappingDescription> 
+                            <NewPortMappingDescription></NewPortMappingDescription> 
                             <NewLeaseDuration>0</NewLeaseDuration> 
                             <NewEnabled>1</NewEnabled> 
                         </u:AddPortMapping> 
@@ -98,20 +98,45 @@ def add_port_mapping():
                 </s:Envelope>"""
 
     headers = { 'content-type': 'text/xml', 'SOAPAction' : 'urn:schemas-upnp-org:service:WANIPConnection:1#AddPortMapping' }
-    r = requests.post('http://192.168.1.1:5000/Public_UPNP_C3', headers=headers, data=payload )
+    r = requests.post( url, headers=headers, data=payload )
     print r.content
     
 
+def set_services(location):
+    print "Setting Service to {0}".format(location)
+    r = requests.get( location )
+    #print r.content
+    tree = ET.fromstring( r.content )
+     
+    
+
+def set_location(url_locations):
+
+    for i in range(len(url_locations)):
+        print "[{0}] {1}".format(i, url_locations[i])
+    idx = int ( input("Set Location: ") )
+    
+    if idx > 0 and idx < len(url_locations):
+        set_services(url_locations[idx])
+    else:
+        print "Error!"
+        sys.exit(0)
+    
+
+
 
 def store_location(data):
-    print data
+    #print data
     location = re.search("(?i)Location: (.+?)\r\n", data)
     if location:
-        print location.group(1)
+        return location.group(1)
 
 
 
 def ssdp():
+
+    url_locations = []
+
     ### UPnP Architecture Specs ###
     # M-SEARCH - Method for search requests
     # HOST - Multicast channed and port reserved for SSDP
@@ -122,22 +147,31 @@ def ssdp():
             'HOST:239.255.255.250:1900\r\n' 
             'MAN:"ssdp:discover"\r\n' 
             'MX:10\r\n' 
-            'ST:upnp:rootdevice\r\n' 
+            'ST:upnp:rootdevice\r\n'
             '\r\n')
 
 
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s.settimeout(5)
     s.sendto(SSDP, ('239.255.255.250', 1900) )
+    
+    
+
+    print "Discovering..."
 
     try:
 
         while 1:
             data, sokt = s.recvfrom(4096)
-            if store: store_location(data)
+            url_locations.append( store_location(data) )
             
     except socket.timeout:
         s.close()
+    
+    if store and len(url_locations) > 0:
+        set_location(url_locations)
+    elif store:
+        print "Nothing Found!"
 
 
 
@@ -149,7 +183,7 @@ def main():
 
     # read the command line options
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "dsqmersg", ["discover", "store", "quit", "mapping", "external", "remove", "status", "generic"])
+        opts, args = getopt.getopt(sys.argv[1:], "dsqmersg", ["discover", "set", "quit", "mapping", "external", "remove", "status", "generic"])
     except getopt.GetoptError as err:
         print str(err)
         sys.exit(-1)
@@ -157,7 +191,7 @@ def main():
     for o, a in opts:
         if o in ("-d", "--discover"):
             discover = True
-        elif o in ("-s", "--store"):
+        elif o in ("-s", "--set"):
             store = True
         elif o in ("-q", "--quit"):
             sys.exit(0)
